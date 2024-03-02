@@ -139,7 +139,7 @@ void print_str(int i, std::string const& s) {
 void danger_oops(int som_param) {
     char buffer[1024];
     sprintf(buffer, "%i", som_param);
-    std::thread t(print_str, 3, buffer); // buffer可能回收
+    std::thread t(print_str, 3, buffer); // 局部变量buffer可能回收
     t.detach();
     std::cout << "danger oops finished" << std::endl;
 }
@@ -160,7 +160,7 @@ void chage_param(int& param){
 
 void ref_oops(int som_param) {
     std::cout << "before change, param is " << som_param << std::endl;
-    std::thread t(chage_param,std::ref(som_param));
+    std::thread t(chage_param,std::ref(som_param));// 不加stds:ref会盲目复制，传递的是副本的引用即data副本(copy)的引用
     t.join();
     std::cout << "after change, param is " << som_param << std::endl;
 }
@@ -193,6 +193,141 @@ void move_oops() {
     t.join();
 }
 ```
+
+### 线程归属
+
+使用`std::move`移动归属；
+
+不能将一个线程的管理权交给一个已经绑定线程的变量，会触发线程的terminate函数引发崩溃
+
+```cpp
+void some_function(){
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+void some_other_function(){
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+std::thread t1(some_function);
+std::thread t2 = std::move(t1);
+
+t1 = std::thread(some_other_function);
+std::thread t3;
+t3 = std::move(t2);
+// t1 = std::move(t3);  // 将一个线程的管理权交给一个已经绑定线程的变量，会触发线程的terminate函数引发崩溃
+std::this_thread::sleep_for(std::chrono::seconds(10));
+```
+
+### 容器存储
+
+生成一批线程并等待它们完成。初始化多个线程存储在vector中, 采用的时emplace方式，可以直接根据线程构造函数需要的参数构造，这样就避免了调用thread的拷贝构造函数。
+
+```cpp
+void param_function(int a) {
+    std::cout << "param is " << a << std::endl;
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+void use_vector() {
+    unsigned int N = std::thread::hardware_concurrency(); 
+    std::vector<std::thread> threads;
+    for (unsigned int i = 0; i < N; ++i) {
+        threads.emplace_back(param_function, i);
+    }
+    for (auto& entry : threads) {
+        if (entry.joinable()) {
+            entry.join();
+        } 
+    }
+    threads.clear();
+}
+```
+
+### 选择运行数量
+
+> `std::thread::hardware_concurrency()`函数，它的返回值是一个指标，表示程序在各次运行中可真正并发的线程数量。
+
+```cpp
+template<typename Iterator, typename T>
+struct accumulate_block{
+    void operator()(Iterator first, Iterator last, T& result){
+        result = std::accumulate(first, last, result);
+    }
+};
+
+template<typename Iterator, typename T>
+T parallel_accumulate(Iterator first, Iterator last, T init){
+    unsigned long const length = std::distance(first, last);
+    if (!length) {  // 1.输入为空，返回初始值init
+        return init;
+    }
+    unsigned long const min_per_thread = 25;
+    unsigned long const max_threads = (length + min_per_thread - 1) / min_per_thread;  // 2.需要的线程最大数（向上取整）
+    unsigned long const hardware_threads = std::thread::hardware_concurrency();
+    unsigned long const num_threads = std::min(hardware_threads!=0 ? hardware_threads : 2, max_threads); // 3.实际的线程选择数量
+    unsigned long const block_size = length / num_threads; // 4.每个线程待处理的条目数量，步长
+
+    std::vector<T> results(num_threads);
+    std::vector<std::thread> threads(num_threads - 1);  // 5.初始化了(num_threads - 1)个大小的vector，因为主线程也参与计算
+
+    Iterator block_start = first;
+    for (unsigned long i = 0; i < num_threads - 1; ++i){
+        Iterator block_end = block_start;
+        std::advance(block_end, block_size);  // 6. 递进block_size迭代器到当前块的结尾
+        threads[i] = std::thread(accumulate_block<Iterator, T>(), block_start, block_end, std::ref(results[i])); // 7.启动新的线程计算结果
+        block_start = block_end;  // 8.更新起始位置
+    }
+    accumulate_block<Iterator, T>()(
+        block_start, last, results[num_threads - 1]);     // 9. 主线程计算，处理最后的块
+        for (auto& entry : threads){
+            if (entry.joinable()){
+                entry.join();
+            }
+        }
+    return std::accumulate(results.begin(), results.end(), init);  // 10. 累加
+}
+void use_parallel_acc(int N) {
+    auto start = std::chrono::high_resolution_clock::now();
+    std::vector <int> vec(N);
+    for (int i = 0; i < N; i++) {
+        vec.push_back(i);
+    }
+    int sum = 0;
+    sum = parallel_accumulate<std::vector<int>::iterator, int>(vec.begin(), vec.end(), sum);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> timeDuration = end - start;
+    double duration = timeDuration.count();
+    std::cout << "use_parallel_acc sum is " << sum << " duration: " << duration << std::endl;
+}
+```
+
+### 识别线程
+
+> 获取线程ID，根据线程id是否相同判断是否同一个线程
+>
+> * 通过`get_id()`成员函数来获取
+> * `std::this_thread::get_id()`获取
+
+```cpp
+void do_subthread(){
+    std::cout << "do sub thread work " << std::this_thread::get_id() << std::endl;
+}
+
+void thread_id(){
+    std::thread::id master_thread = std::this_thread::get_id();
+    std::thread t(do_subthread);
+    std::cout << "do_subthread id: " << t.get_id() << std::endl; // 线程可能没运行，可能会返回一个空的 std::thread::id
+    t.join();
+    if (std::this_thread::get_id() == master_thread){
+        std::cout << "do master thread work: "<<  std::this_thread::get_id() << std::endl;
+    }
+    std::cout << "do common thread work: " <<  std::this_thread::get_id() << std::endl;
+}
+```
+
+
 
 # 进程
 

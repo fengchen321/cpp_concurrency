@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -c -Wall -g
 LDFLAGS = -lpthread
 
-TARGETS = Thread_Management
+TARGETS = Thread_Management Thread_Management_1
 SRCS = $(wildcard *.cpp)
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 

@@ -1,7 +1,6 @@
 #include <iostream>
 #include <thread>
 
-
 void hello() {
     std::cout << "Hello world !" << std::endl;
 }
