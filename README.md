@@ -327,6 +327,92 @@ void thread_id(){
 }
 ```
 
+## 锁
+
+###  避免竞争
+
+* 保护机制封装数据结构
+
+  * 互斥量（mutex)  ----`lock`加锁 和`unlock`解锁
+
+    > `std::lock_guard<std::mutex> lock(mtx1)`：互斥量`RAII`惯用法，自动加锁和解锁
+    >
+    > > 不要将对受保护数据的指针和引用传递到锁的范围之外
+    >
+    > 死锁 `deadlock`：每个线程都在等待另一个释放其`mutex`
+    >
+    > > 使用相同顺序锁定两个`mutex`
+    > >
+    > > 将加锁和解锁的功能封装为独立的函数
+    > >
+    > > 使用两个互斥量，同时加锁
+    >
+    > 层级锁：同一个函数内部加多个锁的情况，要尽可能避免循环加锁，自定义一个层级锁来保证项目中对多个互斥量加锁时是有序的。
+
+* 修改数据结构的设计及不变量 （无锁编程）
+
+### 同时加锁
+
+```cpp
+方法1：
+std::lock(objm1._mtx, objm2._mtx);
+std::lock_guard<std::mutex> guard1(objm1._mtx, std::adopt_lock); //领养锁，只负责解锁，不负责加锁
+std::lock_guard<std::mutex> guard2(objm2._mtx, std::adopt_lock);
+方法2：
+std::scoped_lock guard(objm1._mtx, objm2._mtx); // c++17
+```
+
+### 层级锁
+
+```cpp
+class hierarchical_mutex {
+public:
+    explicit hierarchical_mutex(unsigned long value):_hierarchy_value(value), _previous_hierarchy_value(0){}
+    hierarchical_mutex(const hierarchical_mutex&) = delete;
+    hierarchical_mutex& operator=(const hierarchical_mutex&) = delete;
+    void lock(){
+        check_for_hierarchy_violation();
+        _internal_mutex.lock();  // 实际锁定
+        update_hierarchy_value();  //更新层级值
+    }
+
+    void unlock(){
+        if (_this_thread_hierarchy_value != _hierarchy_value) {
+            throw std::logic_error("mutex hierarchy violated");
+        }
+        _this_thread_hierarchy_value = _previous_hierarchy_value;  // 保存当前线程之前的层级值
+        _internal_mutex.unlock();
+    }
+    
+    bool try_lock(){
+        check_for_hierarchy_violation();
+        if (!_internal_mutex.try_lock()){
+            return false;
+        }
+        update_hierarchy_value();
+        return true;
+    }
+private:
+    std::mutex _internal_mutex;
+    unsigned long const _hierarchy_value;  // 当前层级值
+    unsigned long _previous_hierarchy_value;  // 上一次层级值
+    static thread_local unsigned long _this_thread_hierarchy_value; // 当前线程记录的层级值  
+
+    void check_for_hierarchy_violation(){
+        if (_this_thread_hierarchy_value <= _hierarchy_value){    
+             throw  std::logic_error("mutex  hierarchy violated");
+        }
+    }
+
+    void update_hierarchy_value(){
+        _previous_hierarchy_value = _this_thread_hierarchy_value; 
+        _this_thread_hierarchy_value = _hierarchy_value;
+    }
+};
+
+thread_local unsigned long hierarchical_mutex::_this_thread_hierarchy_value(ULONG_MAX);  //初始化为最大值
+```
+
 
 
 # 进程
