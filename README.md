@@ -329,7 +329,7 @@ void thread_id(){
 
 ## 锁
 
-###  避免竞争
+###  避免竞争 `lock_guard`
 
 * 保护机制封装数据结构
 
@@ -413,7 +413,171 @@ private:
 thread_local unsigned long hierarchical_mutex::_this_thread_hierarchy_value(ULONG_MAX);  //初始化为最大值
 ```
 
+### `unique_lock`
 
+`unique_lock`：可以手动解锁。，通过`unique_lock`的`owns_lock`判断是否持有锁
+
+```cpp
+std::mutex mtx;
+int shared_data = 0;
+void use_unique_owns() {
+    std::unique_lock<std::mutex> guard(mtx);
+    if (guard.owns_lock()){
+        std::cout << "owns lock" << std::endl;
+    }
+    else {
+        std::cout << "doesn't own lock" << std::endl;
+    }
+    shared_data++;
+    guard.unlock();
+    if (guard.owns_lock()){
+        std::cout << "owns lock" << std::endl;
+    }
+    else {
+        std::cout << "doesn't own lock" << std::endl;
+    }
+}
+```
+支持领养和延迟加锁
+
+* 将`std::adopt_lock`作为第二参数传入构造函数，对互斥量进行管理
+* 将`std::defer_lock`作为第二参数传入构造函数，表明互斥量应保持解锁状态。
+
+```cpp
+int a = 10, b = 100;
+std::mutex mtx1;
+std::mutex mtx2;
+
+void safe_swap_adopt(){
+    std::lock(mtx1, mtx2);
+    std::unique_lock<std::mutex> guard1(mtx1, std::adopt_lock); 
+    std::unique_lock<std::mutex> guard2(mtx2, std::adopt_lock); 
+    std::swap(a,b);
+    guard1.unlock(); // 可自动释放， 已经领养不能mtx1.unlock()
+    guard2.unlock();
+    std::cout << "a = " << a << ", b = " << b << std::endl;
+}
+
+void safe_swap_defer(){
+    std::unique_lock<std::mutex> guard1(mtx1, std::defer_lock); 
+    std::unique_lock<std::mutex> guard2(mtx2, std::defer_lock); 
+    std::lock(guard1, guard2);
+    std::swap(a,b);
+    std::cout << "a = " << a << ", b = " << b << std::endl;
+}
+```
+
+`mutex`是不支持移动和拷贝的，`unique_lock`可移动，不可赋值
+
+```cpp
+std::unique_lock<std::mutex> get_lock() {
+    std::unique_lock<std::mutex> lk(mtx);
+    shared_data++;
+    return lk;
+}
+void test_return() {
+    std::unique_lock<std::mutex> lk(get_lock());
+    shared_data++;
+}
+```
+
+锁的粒度：表示加锁的精细程度。
+
+一个锁的粒度要足够大，以保证可以锁住要访问的共享数据。
+一个锁的粒度要足够小，以保证非共享的数据不被锁住影响性能。
+
+```
+void precision_lock() {
+    std::unique_lock<std::mutex> lk(mtx);
+    shared_data++;
+    lk.unlock();
+   // 不涉及共享数据的耗时操作不在锁内执行;
+   std::this_thread::sleep_for(std::chrono::seconds(1));
+    lk.lock();
+    shared_data++;
+    lk.unlock();
+}
+```
+
+### `shared_lock`
+
+C++11标准没有共享互斥量，可以使用boost提供的`boost::shared_mutex`
+
+`std::shared_mutex`（c++17）
+
+> * 提供`lock()`、`try_lock_for()`和`try_lock_until()`用于获取互斥锁的函数
+> * 提供`try_lock_shared()`和`lock_shared()`用于获取共享锁的函数
+> * 当 `std::shared_mutex` 被锁定后，其他尝试获取该锁的线程将会被阻塞，直到该锁被解锁
+
+`std::shared_timed_mutex `(c++14、17)
+
+> * 提供`lock()`、`try_lock_for()`和`try_lock_until()`用于获取互斥锁的函数
+> * 提供`try_lock_shared()`和`lock_shared()`用于获取共享锁的函数 (超时机制)
+> * 尝试获取共享锁时，如果不能立即获得锁，`std::shared_timed_mutex` 会设置一个超时，超时过后如果仍然没有获取到锁，则操作将返回失败。
+
+写操作需要独占锁。而读操作需要共享锁。
+
+```cpp
+class dns_cache {
+public:
+    std::string  find_entry(std::string const & domain) const {
+        std::shared_lock<std::shared_mutex> lk(entry_mutex); // 保护共享和只读权限
+        std::map<std::string, std::string>::const_iterator const it = entries.find(domain);
+        return (it == entries.end()) ? "" : it->second;
+    }
+    void update_or_add_entry(std::string const & domain, std::string const& dns_details) {
+        std::lock_guard<std::shared_mutex> lk(entry_mutex);
+        entries[domain] = dns_details;
+    }
+private:
+    std::map<std::string, std::string> entries;
+    mutable std::shared_mutex entry_mutex;
+};
+```
+
+### `recursive_lock`
+
+出现一个接口调用另一个接口的情况，如果用普通的`std::mutex`就会出现卡死
+
+```cpp
+class RecursiveDemo {
+public:
+    RecursiveDemo() {}
+    bool QueryStudent(std::string name) {
+        // std::lock_guard<std::mutex> mutex_lock(_mtx);
+        std::lock_guard<std::recursive_mutex> recursive_lock(_recursive_mtx);
+        auto iter_find = _students_info.find(name);
+        if (iter_find == _students_info.end()) {
+            return false;
+        }
+        return true;
+    }
+    void AddScore(std::string name, int score) {
+        // std::lock_guard<std::mutex> mutex_lock(_mtx);
+        std::lock_guard<std::recursive_mutex>  recursive_lock(_recursive_mtx);
+        if (!QueryStudent(name)) {
+            _students_info.insert(std::make_pair(name, score));
+            return;
+        }
+        _students_info[name] = _students_info[name] + score;
+    }
+    void AddScoreAtomic(std::string name, int score) {
+        std::lock_guard<std::mutex> mutex_lock(_mtx);
+        // std::lock_guard<std::recursive_mutex>  recursive_lock(_recursive_mtx);
+        auto iter_find = _students_info.find(name);
+        if (iter_find == _students_info.end()){
+             _students_info.insert(std::make_pair(name, score));
+            return;
+        }
+         _students_info[name] = _students_info[name] + score;
+        return;
+    }
+private:
+    std::map<std::string, int> _students_info;
+    std::mutex _mtx;
+    std::recursive_mutex _recursive_mtx;
+};
+```
 
 # 进程
 
