@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -c -Wall -g -std=c++11
 LDFLAGS = -lpthread
 
-TARGETS = condition_var
+TARGETS = condition_var async_feature
 SRCS = $(wildcard *.cpp)
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 

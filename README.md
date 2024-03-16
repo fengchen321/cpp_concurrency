@@ -583,6 +583,10 @@ private:
 
 ### 条件变量
 
+> `std::condition_variable `, 与`std::mutex`一起
+>
+> `std::condition_variable_any`，与满足最低标准的互斥量一起
+
 条件不满足时(num 不等于1 时)`cvA.wait`就会挂起，等待线程B通知通知线程A唤醒，线程B采用的是`cvA.notifyone`
 
 ```cpp
@@ -680,11 +684,200 @@ private:
 };
 ```
 
-### future
-
-### promise
-
 ### async
+
+> 用于异步执行函数的模板函数，它返回一个 `std::future` 对象，该对象用于获取函数的返回值。
+>
+> 类似`std::thread`,通过添加额外的调用参数，向函数传递额外的参数。
+
+```cpp
+std::string fetchDataFromDB(std::string query) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    return "Data: " + query;
+}
+void use_asyc() {
+    // 使用 std::async 异步调用 fetchDataFromDB
+    std::future<std::string> resultFromDB = std::async(std::launch::async, fetchDataFromDB, "Data");
+
+    // 在主线程中做其他事情
+	std::cout << "Doing something else..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    std::cout << "past 4s" << std::endl;
+
+	// 从 future 对象中获取数据
+	std::string dbData = resultFromDB.get();
+	std::cout << dbData << std::endl;
+}
+```
+
+`std::async` 创建了一个新的线程（或从内部线程池中挑选一个线程）并自动与一个 `std::promise` 对象相关联。`std::promise` 对象被传递给 `fetchDataFromDB` 函数，函数的返回值被存储在 `std::future` 对象中。在主线程中，使用 `std::future::get` 方法从 `std::future` 对象中获取数据。注意，在使用 `std::async` 的情况下，必须使用 `std::launch::async` 标志来明确表明希望函数异步执行。
+
+**启动策略**：在`std::launch`枚举中定义。
+
+```cpp
+  enum class launch
+  {
+    async = 1,
+    deferred = 2
+  };
+```
+
+* `std::launch::async`：表明函数必须在其所在的独立线程上执行
+* `std::launch::deferred`：表明函数调用被延迟到`std::future::get()`或`std::future::wait()`时才执行。（要结果的时候才执行）
+* `std::launch::async | std::launch::deferred`：（默认使用）任务可以在一个单独的线程上异步执行，也可以延迟执行，具体取决于实现。
+
+### future 期望值
+
+> 唯一期望值：`std::futurte<>`；只能与一个指定事件相关联
+>
+> 共享期望值：`std::shared_future<>`：可关联多个事件，所有实例同时变为就绪状态。
+
+`std::future::get()`：阻塞调用，用于获取并返回任务的结果；只能调用一次
+
+`std::future::wait()`： 阻塞调用，只是等待任务完成；可以被多次调用
+
+**任务与future关联**
+
+`std::packaged_task`：是一个可调用对象，它包装了一个任务，该任务可以在另一个线程上运行。它可以捕获任务的返回值或异常，并将其存储在`std::future`对象中，以便以后使用。
+
+> 1. 创建一个`std::packaged_task`对象，该对象包装了要执行的任务。
+> 2. 调用`std::packaged_task`对象的`get_future()`方法，该方法返回一个与任务关联的`std::future`对象。
+> 3. 在另一个线程上调用`std::packaged_task`对象的`operator()`，以执行任务。
+> 4. 在需要任务结果的地方，调用与任务关联的`std::future`对象的`get()`方法，以获取任务的返回值或异常。
+
+```cpp
+int my_task() {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::cout << "my task run 5 s" << std::endl;
+    return 0;
+}
+
+void use_package() {
+    std::packaged_task<int()> task(my_task);     //创建一个`std::packaged_task`对象，该对象包装了要执行的任务。
+    std::future<int> result = task.get_future(); //  // 获取与任务关联的 std::future 对象  
+    std::thread t(std::move(task));  // 在另一个线程上执行任务  
+    t.detach();
+    int value = result.get();      // 等待任务完成并获取结果  
+    std::cout << "The result is: " << value << std::endl;
+}
+```
+
+**共享类型的future**
+
+多个线程等待同一个异步操作的结果
+
+```cpp
+void myFunction(std::promise<int>&& promise) {
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+	promise.set_value(42); // 设置 promise 的值
+}
+
+void threadFunction(std::shared_future<int> future) {
+	try {
+		int result = future.get();
+		std::cout << "Result: " << result << std::endl;
+	}
+	catch (const std::future_error& e) {
+		std::cout << "Future error: " << e.what() << std::endl;
+	}
+}
+
+void use_shared_future() {
+	std::promise<int> promise;
+	std::shared_future<int> future = promise.get_future();
+	std::thread myThread1(myFunction, std::move(promise)); // 将 promise 移动到线程中
+	// 使用 share() 方法获取新的 shared_future 对象  
+	std::thread myThread2(threadFunction, future);
+	std::thread myThread3(threadFunction, future);
+	myThread1.join();
+	myThread2.join();
+	myThread3.join();
+}
+```
+
+**异常处理**
+
+```cpp
+void may_throw()
+{
+	throw std::runtime_error("Oops, something went wrong!"); // 抛出一个异常
+}
+
+void use_future_exception() {
+	std::future<void> result(std::async(std::launch::async, may_throw)); // 创建一个异步任务
+	try {
+		result.get(); // 获取结果（如果在获取结果时发生了异常，那么会重新抛出这个异常）
+	}
+	catch (const std::exception& e) {
+		std::cerr << "Caught exception: " << e.what() << std::endl; // 捕获并打印异常
+	}
+}
+```
+
+### promise 承诺值
+
+> `std::promise`用于在某一线程中**设置**某个值或异常，
+>
+> > `std::promise::set_value()`：设置异步操作的结果值
+> >
+> > `std::promise::set_exception`：设置异常情况
+> >
+> > > 接受一个`std::exception_ptr`参数，该参数可以通过调用`std::current_exception()`方法获取
+>
+> `std::future`则用于在另一线程中**获取**这个值或异常。
+
+```cpp
+void set_value(std::promise<int> prom) {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    prom.set_value(10);
+    std::cout << "promise set value success" << std::endl;
+}
+
+void use_promise_setvalue() {
+    std::promise<int> prom;   // 创建一个 promise 对象
+    std::future<int> fut = prom.get_future(); // 获取与 promise 相关联的 future 对象
+    std::thread t(set_value, std::move(prom)); // 在新线程中设置 promise 的值
+    std::cout << "Waiting for the thread to set the value...\n";
+	std::cout << "Value set by the thread: " << fut.get() << '\n'; // 在主线程中获取 future 的值
+	t.join();
+}
+// 随着局部作用域}的结束，prom可能被释放也可能会被延迟释放，如果立即释放则fut.get()获取的值会报error_value的错误
+void bad_promise_setvalue() {
+    std::thread t;
+    std::future<int> fut;
+    {
+        std::promise<int> prom;   // 创建一个 promise 对象
+        fut = prom.get_future(); // 获取与 promise 相关联的 future 对象
+        t = std::thread(set_value, std::move(prom)); // 在新线程中设置 promise 的值
+    }
+    std::cout << "Waiting for the thread to set the value...\n";
+	std::cout << "Value set by the thread: " << fut.get() << '\n'; // 在主线程中获取 future 的值
+	t.join();
+}
+
+void set_exception(std::promise<void> prom) {
+    try {
+        throw std::runtime_error("An error occurred!");
+    }
+    catch (...) {
+        prom.set_exception(std::current_exception());
+    }
+}
+
+void use_promise_setexception() {
+    std::promise<void> prom;   // 创建一个 promise 对象
+    std::future<void> fut = prom.get_future(); // 获取与 promise 相关联的 future 对象
+    std::thread t(set_exception, std::move(prom)); // 在新线程中设置 promise 的异常
+    try {
+		std::cout << "Waiting for the thread to set the exception...\n";
+		fut.get();
+	}
+	catch (const std::exception& e) {
+		std::cout << "Exception set by the thread: " << e.what() << '\n';
+	}
+	t.join();
+}
+```
 
 # 进程
 
