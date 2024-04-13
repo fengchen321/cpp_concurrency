@@ -736,6 +736,8 @@ void use_asyc() {
 
 `std::future::wait()`： 阻塞调用，只是等待任务完成；可以被多次调用
 
+`std::future::wait_for()`和`std::future::wait_until`检查异步操作是否已完成，返回一个表示操作状态的`std::future_status`值
+
 **任务与future关联**
 
 `std::packaged_task`：是一个可调用对象，它包装了一个任务，该任务可以在另一个线程上运行。它可以捕获任务的返回值或异常，并将其存储在`std::future`对象中，以便以后使用。
@@ -863,7 +865,7 @@ void set_exception(std::promise<void> prom) {
         prom.set_exception(std::current_exception());
     }
 }
-
+// 注：子线程调用了set_exception，主线程一定要捕获这个异常，否则崩溃
 void use_promise_setexception() {
     std::promise<void> prom;   // 创建一个 promise 对象
     std::future<void> fut = prom.get_future(); // 获取与 promise 相关联的 future 对象
