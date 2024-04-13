@@ -881,6 +881,81 @@ void use_promise_setexception() {
 }
 ```
 
+### 快速排序实例
+
+开辟一个一次性的线程执行并行任务，主线程可以通过future在合适的时机执行等待汇总结果。
+
+```cpp
+template<typename T>
+void quick_sort_recursive(T q[], int l, int r){
+    if (l >= r) return;
+    T x = q[(l + r + 1) >> 1];
+    int i = l - 1, j = r + 1;
+    while(i < j){
+        do i++; while(q[i] < x);
+        do j--; while(q[j] > x);
+        if (i < j) std::swap (q[i], q[j]);
+    }
+    quick_sort_recursive(q, l, i - 1);
+    quick_sort_recursive(q, i, r);
+}
+
+template<typename T>
+void quick_sort(T q[], int len) {
+    quick_sort_recursive(q, 0, len - 1);
+}
+```
+
+串行版本
+
+```cpp
+template<typename T>
+std::list<T> sequential_quick_sort(std::list<T> input) {
+    if (input.empty()) {
+        return input;
+    }
+    std::list<T> result;
+    result.splice(result.begin(), input, input.begin()); // 将 input 列表中的第一个元素移动到 result 列表的起始位置，并且在 input 列表中删除该元素
+    T const& pivot = *result.begin(); // 取首元素作为 x
+    // partition 分区函数，使得满足条件的元素排在不满足条件元素之前。divide_point指向的是input中第一个大于等于pivot的地址
+    auto divide_point = std::partition(input.begin(), input.end(),
+        [&](T const& t){return t < pivot;});
+    std::list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point); // 小于pivot的元素放在lower_part里
+    auto new_lower(sequential_quick_sort(std::move(lower_part)));
+    auto new_higher(sequential_quick_sort(std::move(input)));
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower);
+    return result;
+}
+```
+
+并行版本
+
+```cpp
+template<typename T>
+std::list<T> parallel_quick_sort(std::list<T> input) {
+    if (input.empty()) {
+        return input;
+    }
+    std::list<T> result;
+    result.splice(result.begin(), input, input.begin());
+    T const& pivot = *result.begin(); 
+
+    auto divide_point = std::partition(input.begin(), input.end(),
+        [&](T const& t){return t < pivot;});
+    std::list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+    std::future<std::list<T>> new_lower(std::async(parallel_quick_sort<T>, std::move(lower_part)));
+    auto new_higher(parallel_quick_sort(std::move(input)));
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower.get());
+    return result;
+}
+```
+
+
+
 # 进程
 
 fork前是多线程，fork后是不会继续运行多线程
