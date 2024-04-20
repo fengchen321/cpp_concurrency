@@ -1,13 +1,12 @@
 CXX = g++
-CXXFLAGS = -c -Wall -g -std=c++14
+CXXFLAGS = -c -Wall -g -std=c++11
 LDFLAGS = -lpthread
 
-TARGETS = condition_var async_feature thread_pool quick_sort csp_producer_consumer qa_test
+TARGETS = csp_ATM
 SRCS = $(wildcard *.cpp)
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 
 all: $(TARGETS)
-
 $(TARGETS): %: %.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
@@ -17,3 +16,5 @@ $(TARGETS): %: %.o
 .PHONY: clean
 clean:
 	rm -f *.o $(TARGETS)
+
+

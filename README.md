@@ -221,6 +221,70 @@ t3 = std::move(t2);
 std::this_thread::sleep_for(std::chrono::seconds(10));
 ```
 
+自动join的线程类 `joining_thread`
+
+```cpp
+class joining_thread {
+    std::thread  _t;
+public:
+    joining_thread() noexcept = default;
+    template<typename Callable, typename ...  Args>
+    explicit  joining_thread(Callable&& func, Args&& ...args):
+        _t(std::forward<Callable>(func),  std::forward<Args>(args)...){}
+    explicit joining_thread(std::thread  t) noexcept: _t(std::move(t)){}
+    joining_thread(joining_thread&& other) noexcept: _t(std::move(other._t)){}
+    joining_thread& operator=(joining_thread&& other) noexcept {
+        if (joinable()) {
+            join();
+        }
+        _t = std::move(other._t);
+        return *this;
+    }
+
+	joining_thread& operator=(std::thread other) noexcept {
+		if (joinable()) {
+			join();
+		}
+		_t = std::move(other);
+		return *this;
+	}
+
+    ~joining_thread() noexcept {
+        if (joinable()) {
+            join();
+        }
+    }
+
+    void swap(joining_thread& other) noexcept {
+        _t.swap(other._t);
+    }
+
+    std::thread::id   get_id() const noexcept {
+        return _t.get_id();
+    }
+
+    bool joinable() const noexcept {
+        return _t.joinable();
+    }
+
+    void join() {
+        _t.join();
+    }
+
+    void detach() {
+        _t.detach();
+    }
+
+    std::thread& as_thread() noexcept {
+        return _t;
+    }
+
+    const std::thread& as_thread() const noexcept {
+        return _t;
+    }
+};
+```
+
 ### 容器存储
 
 生成一批线程并等待它们完成。初始化多个线程存储在vector中, 采用的时emplace方式，可以直接根据线程构造函数需要的参数构造，这样就避免了调用thread的拷贝构造函数。
@@ -954,7 +1018,65 @@ std::list<T> parallel_quick_sort(std::list<T> input) {
 }
 ```
 
+### 并发设计模式
 
+#### Actor
+
+> 系统由多个独立的并发执行的actor组成。每个actor都有自己的状态、行为和邮箱（用于接收消息）。Actor之间通过消息传递进行通信，而不是共享状态。
+
+#### CSP（Communicating Sequential Processes）通信顺序进程
+
+> 各个进程之间彼此独立，通过发送和接收消息进行通信，通道用于确保进程之间的同步。
+
+生产者消费者模型
+
+```cpp
+template<typename T>
+class Channel {
+    public:
+      Channel(size_t capacity = 0):capacity_(capacity){}
+
+      bool send(T value) {
+        std::unique_lock<std::mutex> lock(mtx_);
+        cv_producer_.wait(lock, [this]() {return (capacity_ == 0 && queue_.empty()) || queue_.size() < capacity_ || closed_;});
+        if (closed_) {
+            return false;
+        }
+        queue_.push(value);
+        cv_consumer_.notify_one();
+        return true;
+      }
+
+      bool receive(T& value) {
+        std::unique_lock<std::mutex> lock(mtx_);
+        cv_consumer_.wait(lock, [this]() {return !queue_.empty() ||  closed_;});
+        if (closed_ && queue_.empty()) {
+            return false;
+        }
+        value = queue_.front();
+        queue_.pop();
+        cv_producer_.notify_one();
+        return true;
+      }
+      void close() {
+        std::unique_lock<std::mutex> lock(mtx_);
+        closed_ = true;
+        cv_producer_.notify_all();
+        cv_consumer_.notify_all();
+      }
+    private:
+      std::queue<T> queue_;
+      std::mutex mtx_;
+      std::condition_variable cv_producer_;
+      std::condition_variable cv_consumer_;
+      size_t capacity_;
+      bool closed_ = false;
+};
+```
+
+ATM实例
+
+> handle成员函数：当函数返回一个类类型的局部变量时会先调用移动构造，如果没有移动构造再调用拷贝构造。
 
 # 进程
 

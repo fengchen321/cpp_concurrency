@@ -121,6 +121,96 @@ void thread_id(){
     std::cout << "do common thread work: " <<  std::this_thread::get_id() << std::endl;
 }
 
+
+class joining_thread {
+    std::thread  _t;
+public:
+    joining_thread() noexcept = default;
+    template<typename Callable, typename ...  Args>
+    explicit  joining_thread(Callable&& func, Args&& ...args):
+        _t(std::forward<Callable>(func),  std::forward<Args>(args)...){}
+    explicit joining_thread(std::thread  t) noexcept: _t(std::move(t)){}
+    joining_thread(joining_thread&& other) noexcept: _t(std::move(other._t)){}
+    joining_thread& operator=(joining_thread&& other) noexcept {
+        if (joinable()) {
+            join();
+        }
+        _t = std::move(other._t);
+        return *this;
+    }
+
+	joining_thread& operator=(std::thread other) noexcept {
+		if (joinable()) {
+			join();
+		}
+		_t = std::move(other);
+		return *this;
+	}
+
+    ~joining_thread() noexcept {
+        if (joinable()) {
+            join();
+        }
+    }
+
+    void swap(joining_thread& other) noexcept {
+        _t.swap(other._t);
+    }
+
+    std::thread::id   get_id() const noexcept {
+        return _t.get_id();
+    }
+
+    bool joinable() const noexcept {
+        return _t.joinable();
+    }
+
+    void join() {
+        _t.join();
+    }
+
+    void detach() {
+        _t.detach();
+    }
+
+    std::thread& as_thread() noexcept {
+        return _t;
+    }
+
+    const std::thread& as_thread() const noexcept {
+        return _t;
+    }
+};
+
+void use_jointhread() {
+	joining_thread j1([](int maxindex) {
+		for (int i = 0; i < maxindex; i++) {
+			std::cout << "in thread id " << std::this_thread::get_id()
+				<< " cur index is " << i << std::endl;
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		}, 10);
+
+	joining_thread j2(std::thread([](int maxindex) {
+		for (int i = 0; i < maxindex; i++) {
+			std::cout << "in thread id " << std::this_thread::get_id()
+				<< " cur index is " << i << std::endl;
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		}, 10));
+
+	joining_thread j3(std::thread([](int maxindex) {
+		for (int i = 0; i < maxindex; i++) {
+			std::cout << "in thread id " << std::this_thread::get_id()
+				<< " cur index is " << i << std::endl;
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		}, 10));
+
+    j1 = std::move(j3);
+
+}
+
 int main()
 {
     // 1. 线程归属
@@ -135,5 +225,8 @@ int main()
 
     // 4. 识别线程
     thread_id();
+
+    // 5. 自动join的线程类
+    use_jointhread();
     return 0;
 }
