@@ -2,6 +2,7 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <atomic>
 
 // c++11后是线程安全的
 class SingletonStatic {
@@ -115,7 +116,7 @@ private:
 public:
     ~SingleAuto() {std::cout << "single auto delete success " << std::endl; }
     static std::shared_ptr<SingleAuto> GetInstance() {
-        if(singleton != nullptr) {
+        if(singleton != nullptr) { // 1
             return singleton;
         }
         _mutex.lock();
@@ -123,7 +124,7 @@ public:
             _mutex.unlock();
             return singleton;
         }
-        singleton = std::shared_ptr<SingleAuto>(new SingleAuto);
+        singleton = std::shared_ptr<SingleAuto>(new SingleAuto); // 4
         _mutex.unlock();
         return singleton;
         
@@ -141,6 +142,53 @@ void test_singletonauto() {
     for (int i = 0; i < numThreads; ++i) {
          threads.emplace_back([](){
             auto instance = SingleAuto::GetInstance();
+            std::cout << "Instance address: " << instance << std::endl;
+        });
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+}
+
+// 内存模型修复
+class SingleAutoMemory {
+private:
+    SingleAutoMemory(){}
+    SingleAutoMemory(const SingleAutoMemory&) = delete;
+    SingleAutoMemory& operator=(const SingleAutoMemory&) = delete;
+public:
+    ~SingleAutoMemory() {std::cout << "single auto delete success " << std::endl; }
+    static std::shared_ptr<SingleAutoMemory> GetInstance() {
+        if (_b_init.load(std::memory_order_acquire)) {
+            return singleton;
+        }
+        _mutex.lock();
+        if (_b_init.load(std::memory_order_relaxed)) {
+            _mutex.unlock();
+            return singleton;
+        }
+        singleton = std::shared_ptr<SingleAutoMemory>(new SingleAutoMemory);
+        _b_init.store(true, std::memory_order_release);
+        _mutex.unlock();
+        return singleton;
+        
+    }
+private:
+    static std::shared_ptr<SingleAutoMemory> singleton;
+    static std::mutex _mutex;
+    static std::atomic<bool> _b_init;
+};
+
+std::shared_ptr<SingleAutoMemory> SingleAutoMemory::singleton = nullptr;
+std::mutex SingleAutoMemory::_mutex;
+std::atomic<bool> SingleAutoMemory::_b_init(false);
+// SingleAuto类1和4存在线程安全
+void test_singletonauto_memory(){
+    const int numThreads = std::thread::hardware_concurrency();
+    std::vector<std::thread> threads;
+    for (int i = 0; i < numThreads; ++i) {
+         threads.emplace_back([](){
+            auto instance = SingleAutoMemory::GetInstance();
             std::cout << "Instance address: " << instance << std::endl;
         });
     }
@@ -202,6 +250,7 @@ void test_singletonautosafe() {
     }
 }
 
+// 使用call_once
 class SingleOnce {
 private:
     SingleOnce() = default;
@@ -289,8 +338,9 @@ int main() {
     // test_singletonhungry();
     // test_singletonlazy();
     // test_singletonauto();
+    test_singletonauto_memory();
     // test_singletonautosafe();
     // test_singletononce();
-    test_logic_system_singleton();
+    // test_logic_system_singleton();
     return 0;
 }

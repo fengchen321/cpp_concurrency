@@ -30,10 +30,11 @@ private:
                 state = &atm::done_processing;
             }, "cancel_pressed");
     }
-
+    // 发送一条消息到接口，让终端显示“等待卡片”信息
     void waiting_for_card() {
         interface_hardware.send(display_enter_card());
-        incoming.wait().handle<card_inserted, std::function<void(card_inserted const& msg)>,messaging::dispatcher>(
+        // 当收到信息类型与处理类型不匹配时，收到的信息被丢弃，线程继续等待
+        incoming.wait().handle<card_inserted, std::function<void(card_inserted const& msg)>, messaging::dispatcher>(
             [&](card_inserted const& msg) {
                 account = msg.account;
                 pin = "";
@@ -111,7 +112,7 @@ public:
         get_sender().send(messaging::close_queue());
     }
 
-    void run() {
+    void run() { 
         state = &atm::waiting_for_card;
         try {
             for (;;) {

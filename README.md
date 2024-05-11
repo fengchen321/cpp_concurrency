@@ -410,6 +410,8 @@ void thread_id(){
     > > 将加锁和解锁的功能封装为独立的函数
     > >
     > > 使用两个互斥量，同时加锁
+    > >
+    > > 减少锁的使用范围
     >
     > 层级锁：同一个函数内部加多个锁的情况，要尽可能避免循环加锁，自定义一个层级锁来保证项目中对多个互斥量加锁时是有序的。
 
@@ -1020,7 +1022,7 @@ std::list<T> parallel_quick_sort(std::list<T> input) {
 
 ### 并发设计模式
 
-#### Actor
+#### Actor 参与者模式
 
 > 系统由多个独立的并发执行的actor组成。每个actor都有自己的状态、行为和邮箱（用于接收消息）。Actor之间通过消息传递进行通信，而不是共享状态。
 
@@ -1077,6 +1079,54 @@ class Channel {
 ATM实例
 
 > handle成员函数：当函数返回一个类类型的局部变量时会先调用移动构造，如果没有移动构造再调用拷贝构造。
+
+## 内存模型和原子类型
+
+原子操作
+
+> 无法拷贝构造，拷贝赋值
+
+| 操作方式                          | 可选顺序                                                     |
+| --------------------------------- | ------------------------------------------------------------ |
+| `store`操作 存储操作              | `memory_order_relaxed`,`memory_order_release`,`memory_order_seq_cst` |
+| `Load`操作 载入操作               | `memory_order_relaxed`,`memory_order_consume`,`memory_order_acquire`,`memory_order_seq_cst` |
+| `read-modify-write`(读-改-写)操作 | `memory_order_relaxed`,`memory_order_consume`,`memory_order_acquire`,<br />`memory_order_release`,`memory_order_acq_rel`, `memory_order_seq_cst` |
+
+| 成员函数                                                     |                             说明                             |
+| ------------------------------------------------------------ | :----------------------------------------------------------: |
+| `void store(T desired, std::memory_order order = std::memory_order_seq_cst)` |                       写入（释放操作)                        |
+| `T load(std::memory_order order = std::memory_order_seq_cst )` |                       读取（获取操作）                       |
+| `bool compare_exchange_weak(T& expected, T desired, std::memory_order order =std::memory_order_seq_cst)`<br />当前值与期望值(expect)相等时，修改当前值为设定值(desired)，返回true；<br />当前值与期望值(expect)不等时，将期望值(expect)修改为当前值，返回false； |    读改写：比较-交换操作；可能保存失败，往往配合循环使用     |
+| `bool compare_exchange_strong(T& expected, T desired, std::memory_order order =std::memory_order_seq_cst)` | 读改写：内部含循环，保存的值需要耗时计算（或体积较大的原子类型）选择其更合理 |
+| `T exchange(T desired, std::memory_order order = std::memory_order_seq_cst)` |                            读改写                            |
+
+内存顺序
+
+| 内存序                 | 说明                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| `memory_order_relaxed` | 松散内存序，只用来保证对原子对象的操作是原子的，对顺序不做保证（允许指令重排） |
+| `memory_order_consume` | 适用读操作，阻止对这个原子量有依赖的操作重排到前面去（限制读操作之后的部分操作，不允许指令重排） |
+| `memory_order_acquire` | 适用读操作，在读取某原子对象时，当前线程的任何后面的读写操作都不允许重排到这个操作的前面去（读操作之后的部分，不允许指令重排） |
+| `memory_order_release` | 适用写操作，在写入某原子对象时，当前线程的任何前面的读写操作都不允许重排到这个操作的后面去（写操作之前的部分，不允许指令重排） |
+| `memory_order_acq_rel` | 适用读写操作,一个读-修改-写操作同时具有获得语义和释放语义，即它前后的任何读写操作都不允许重排（读写操作不允许指令重排） |
+| `memory_order_seq_cst` | 顺序一致性语义,对于读操作相当于获取，对于写操作相当于释放，对于读-修改-写操作相当于获得释放，是所有原子操作的默认内存序（不允许指令重排） |
+
+自旋锁：当一个线程尝试获取锁时，如果锁已经被其他线程持有，那么该线程就会不断地循环检查锁的状态，直到成功获取到锁为止。
+
+```cpp
+class Spinlock {
+public:
+    Spinlock():flag(ATOMIC_FLAG_INIT){}
+    void lock() {
+        while (flag.test_and_set(std::memory_order_acquire));// 获取旧值并设置标志
+    }
+    void unlock() {
+        flag.clear(std::memory_order_release); // clear为存储操作，显示采用释放语义将标志清零
+    }
+private:
+    std::atomic_flag flag;
+};
+```
 
 # 进程
 
