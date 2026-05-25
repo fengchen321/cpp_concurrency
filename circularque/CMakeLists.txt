@@ -1,0 +1,2 @@
+add_executable(test_circularqueue test_circularqueue.cpp)
+target_link_libraries(test_circularqueue PRIVATE Threads::Threads)

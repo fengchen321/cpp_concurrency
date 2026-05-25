@@ -3,6 +3,7 @@
 #include <vector>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
 // c++11后是线程安全的
 class SingletonStatic {

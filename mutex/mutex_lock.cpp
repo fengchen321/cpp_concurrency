@@ -4,6 +4,7 @@
 #include <stack>
 #include <exception>
 #include <climits>
+#include <memory>
 
 int shared_data = 100;
 std::mutex mtx1;

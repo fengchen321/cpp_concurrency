@@ -1,0 +1,5 @@
+add_executable(Thread_Management Thread_Management.cpp)
+target_link_libraries(Thread_Management PRIVATE Threads::Threads)
+
+add_executable(Thread_Management_1 Thread_Management_1.cpp)
+target_link_libraries(Thread_Management_1 PRIVATE Threads::Threads)

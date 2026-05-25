@@ -6,7 +6,7 @@
 
 ### 初始化线程对象
 
-启动线程后要明确是等待线程结束`join()`，还是让其自主运行`detach()`。否则程序会终止（`std::thread`的析构函数会调用`std::terminate()`）。
+启动线程后要明确是等待线程结束`join()`，还是让其自主运行`detach()`。否则程序会终止(`std::thread`的析构函数会调用`std::terminate()`)。
 
 > 等待线程结束，来保证可访问的数据是有效的。
 >
@@ -31,7 +31,7 @@ public:
 // my_thread被当作函数对象的定义，其返回类型为std::thread, 参数为函数指针background_task()
 // std::thread my_thread(background_task());  // 相当与声明了一个名为my_thread的函数
 
-// 使用一组额外的括号，或使用新统一的初始化语法，可以避免其解释函数声明 （定义一个线程my_thread）
+// 使用一组额外的括号，或使用新统一的初始化语法，可以避免其解释函数声明 (定义一个线程my_thread)
 std::thread my_thread_1((background_task()));
 std::thread my_thread_2{background_task()};
 
@@ -49,8 +49,8 @@ my_thread_3.join();
 当`oops`调用后，局部变量`some_local_state`可能被释放。
 
 > 1. 通过智能指针传递参数。 (引用计数会随着赋值增加，可保证局部变量在使用期间不被释放)
-> 2. 将局部变量的值作为参数传递。（需要局部变量有拷贝复制的功能，而且拷贝耗费空间和效率）
-> 3. 将线程运行的方式修改为join。（可能会影响运行逻辑）
+> 2. 将局部变量的值作为参数传递。(需要局部变量有拷贝复制的功能，而且拷贝耗费空间和效率)
+> 3. 将线程运行的方式修改为join。(可能会影响运行逻辑)
 
 ```cpp
 struct func{
@@ -328,7 +328,7 @@ T parallel_accumulate(Iterator first, Iterator last, T init){
         return init;
     }
     unsigned long const min_per_thread = 25;
-    unsigned long const max_threads = (length + min_per_thread - 1) / min_per_thread;  // 2.需要的线程最大数（向上取整）
+    unsigned long const max_threads = (length + min_per_thread - 1) / min_per_thread;  // 2.需要的线程最大数(向上取整)
     unsigned long const hardware_threads = std::thread::hardware_concurrency();
     unsigned long const num_threads = std::min(hardware_threads!=0 ? hardware_threads : 2, max_threads); // 3.实际的线程选择数量
     unsigned long const block_size = length / num_threads; // 4.每个线程待处理的条目数量，步长
@@ -397,7 +397,7 @@ void thread_id(){
 
 * 保护机制封装数据结构
 
-  * 互斥量（mutex)  ----`lock`加锁 和`unlock`解锁
+  * 互斥量(mutex)  ----`lock`加锁 和`unlock`解锁
 
     > `std::lock_guard<std::mutex> lock(mtx1)`：互斥量`RAII`惯用法，自动加锁和解锁
     >
@@ -415,7 +415,7 @@ void thread_id(){
     >
     > 层级锁：同一个函数内部加多个锁的情况，要尽可能避免循环加锁，自定义一个层级锁来保证项目中对多个互斥量加锁时是有序的。
 
-* 修改数据结构的设计及不变量 （无锁编程）
+* 修改数据结构的设计及不变量 (无锁编程)
 
 ### 同时加锁
 
@@ -569,7 +569,7 @@ void precision_lock() {
 
 C++11标准没有共享互斥量，可以使用boost提供的`boost::shared_mutex`
 
-`std::shared_mutex`（c++17）
+`std::shared_mutex`(c++17)
 
 > * 提供`lock()`、`try_lock_for()`和`try_lock_until()`用于获取互斥锁的函数
 > * 提供`try_lock_shared()`和`lock_shared()`用于获取共享锁的函数
@@ -776,7 +776,7 @@ void use_asyc() {
 }
 ```
 
-`std::async` 创建了一个新的线程（或从内部线程池中挑选一个线程）并自动与一个 `std::promise` 对象相关联。`std::promise` 对象被传递给 `fetchDataFromDB` 函数，函数的返回值被存储在 `std::future` 对象中。在主线程中，使用 `std::future::get` 方法从 `std::future` 对象中获取数据。注意，在使用 `std::async` 的情况下，必须使用 `std::launch::async` 标志来明确表明希望函数异步执行。
+`std::async` 创建了一个新的线程(或从内部线程池中挑选一个线程)并自动与一个 `std::promise` 对象相关联。`std::promise` 对象被传递给 `fetchDataFromDB` 函数，函数的返回值被存储在 `std::future` 对象中。在主线程中，使用 `std::future::get` 方法从 `std::future` 对象中获取数据。注意，在使用 `std::async` 的情况下，必须使用 `std::launch::async` 标志来明确表明希望函数异步执行。
 
 **启动策略**：在`std::launch`枚举中定义。
 
@@ -789,8 +789,8 @@ void use_asyc() {
 ```
 
 * `std::launch::async`：表明函数必须在其所在的独立线程上执行
-* `std::launch::deferred`：表明函数调用被延迟到`std::future::get()`或`std::future::wait()`时才执行。（要结果的时候才执行）
-* `std::launch::async | std::launch::deferred`：（默认使用）任务可以在一个单独的线程上异步执行，也可以延迟执行，具体取决于实现。
+* `std::launch::deferred`：表明函数调用被延迟到`std::future::get()`或`std::future::wait()`时才执行。(要结果的时候才执行)
+* `std::launch::async | std::launch::deferred`：(默认使用)任务可以在一个单独的线程上异步执行，也可以延迟执行，具体取决于实现。
 
 ### future 期望值
 
@@ -874,7 +874,7 @@ void may_throw()
 void use_future_exception() {
 	std::future<void> result(std::async(std::launch::async, may_throw)); // 创建一个异步任务
 	try {
-		result.get(); // 获取结果（如果在获取结果时发生了异常，那么会重新抛出这个异常）
+		result.get(); // 获取结果(如果在获取结果时发生了异常，那么会重新抛出这个异常)
 	}
 	catch (const std::exception& e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl; // 捕获并打印异常
@@ -1024,9 +1024,9 @@ std::list<T> parallel_quick_sort(std::list<T> input) {
 
 #### Actor 参与者模式
 
-> 系统由多个独立的并发执行的actor组成。每个actor都有自己的状态、行为和邮箱（用于接收消息）。Actor之间通过消息传递进行通信，而不是共享状态。
+> 系统由多个独立的并发执行的actor组成。每个actor都有自己的状态、行为和邮箱(用于接收消息)。Actor之间通过消息传递进行通信，而不是共享状态。
 
-#### CSP（Communicating Sequential Processes）通信顺序进程
+#### CSP(Communicating Sequential Processes)通信顺序进程
 
 > 各个进程之间彼此独立，通过发送和接收消息进行通信，通道用于确保进程之间的同步。
 
@@ -1094,22 +1094,22 @@ ATM实例
 
 | 成员函数                                                     |                             说明                             |
 | ------------------------------------------------------------ | :----------------------------------------------------------: |
-| `void store(T desired, std::memory_order order = std::memory_order_seq_cst)` |                       写入（释放操作)                        |
-| `T load(std::memory_order order = std::memory_order_seq_cst )` |                       读取（获取操作）                       |
+| `void store(T desired, std::memory_order order = std::memory_order_seq_cst)` |                       写入(释放操作)                        |
+| `T load(std::memory_order order = std::memory_order_seq_cst )` |                       读取(获取操作)                       |
 | `bool compare_exchange_weak(T& expected, T desired, std::memory_order order =std::memory_order_seq_cst)`<br />当前值与期望值(expect)相等时，修改当前值为设定值(desired)，返回true；<br />当前值与期望值(expect)不等时，将期望值(expect)修改为当前值，返回false； |    读改写：比较-交换操作；可能保存失败，往往配合循环使用     |
-| `bool compare_exchange_strong(T& expected, T desired, std::memory_order order =std::memory_order_seq_cst)` | 读改写：内部含循环，保存的值需要耗时计算（或体积较大的原子类型）选择其更合理 |
+| `bool compare_exchange_strong(T& expected, T desired, std::memory_order order =std::memory_order_seq_cst)` | 读改写：内部含循环，保存的值需要耗时计算(或体积较大的原子类型)选择其更合理 |
 | `T exchange(T desired, std::memory_order order = std::memory_order_seq_cst)` |                            读改写                            |
 
 内存顺序
 
 | 内存序                 | 说明                                                         |
 | ---------------------- | ------------------------------------------------------------ |
-| `memory_order_relaxed` | 松散内存序，只用来保证对原子对象的操作是原子的，对顺序不做保证（允许指令重排） |
-| `memory_order_consume` | 适用读操作，阻止对这个原子量有依赖的操作重排到前面去（限制读操作之后的部分操作，不允许指令重排） |
-| `memory_order_acquire` | 适用读操作，在读取某原子对象时，当前线程的任何后面的读写操作都不允许重排到这个操作的前面去（读操作之后的部分，不允许指令重排） |
-| `memory_order_release` | 适用写操作，在写入某原子对象时，当前线程的任何前面的读写操作都不允许重排到这个操作的后面去（写操作之前的部分，不允许指令重排） |
-| `memory_order_acq_rel` | 适用读写操作,一个读-修改-写操作同时具有获得语义和释放语义，即它前后的任何读写操作都不允许重排（读写操作不允许指令重排） |
-| `memory_order_seq_cst` | 顺序一致性语义,对于读操作相当于获取，对于写操作相当于释放，对于读-修改-写操作相当于获得释放，是所有原子操作的默认内存序（不允许指令重排） |
+| `memory_order_relaxed` | 松散内存序，只用来保证对原子对象的操作是原子的，对顺序不做保证(允许指令重排) |
+| `memory_order_consume` | 适用读操作，阻止对这个原子量有依赖的操作重排到前面去(限制读操作之后的部分操作，不允许指令重排) |
+| `memory_order_acquire` | 适用读操作，在读取某原子对象时，当前线程的任何后面的读写操作都不允许重排到这个操作的前面去(读操作之后的部分，不允许指令重排) |
+| `memory_order_release` | 适用写操作，在写入某原子对象时，当前线程的任何前面的读写操作都不允许重排到这个操作的后面去(写操作之前的部分，不允许指令重排) |
+| `memory_order_acq_rel` | 适用读写操作,一个读-修改-写操作同时具有获得语义和释放语义，即它前后的任何读写操作都不允许重排(读写操作不允许指令重排) |
+| `memory_order_seq_cst` | 顺序一致性语义,对于读操作相当于获取，对于写操作相当于释放，对于读-修改-写操作相当于获得释放，是所有原子操作的默认内存序(不允许指令重排) |
 
 自旋锁：当一个线程尝试获取锁时，如果锁已经被其他线程持有，那么该线程就会不断地循环检查锁的状态，直到成功获取到锁为止。
 
@@ -1164,7 +1164,7 @@ public:
         _tail = (_tail + 1) % _max_size;
         return true;
     }
-    // 接受左值引用版本（加const：让其接受const类型也可以接受非const类型）
+    // 接受左值引用版本(加const：让其接受const类型也可以接受非const类型)
     bool push(const T& val) {
         std::cout << "called push const T& version\n";
         return emplace(val);

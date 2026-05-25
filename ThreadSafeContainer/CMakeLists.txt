@@ -1,0 +1,2 @@
+add_executable(ThreadSafeContainer ThreadSafeContainer.cpp)
+target_link_libraries(ThreadSafeContainer PRIVATE Threads::Threads)
