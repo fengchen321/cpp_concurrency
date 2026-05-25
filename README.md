@@ -1199,6 +1199,46 @@ private:
 
 
 
+## 并发安全容器
+
+### 线程安全队列
+
+#### 版本一：`threadsafe_queue<T>` — 单锁粗粒度
+
+最简单的方案，一把互斥量保护整个`std::queue`：
+
+* `push`：加锁 → 入队 → `notify_one`唤醒等待的消费者
+* `wait_and_pop`：`unique_lock` + `cv.wait`阻塞等待队列非空，然后取出队首
+* `try_pop`：非阻塞，空队列直接返回false
+* 提供两个重载：引用出参版和`shared_ptr`返回版
+
+**缺点**：所有操作（push和pop）竞争同一把锁，高并发下瓶颈明显。
+
+#### 版本二：`threadsafe_queue_ptr<T>` — 存储`shared_ptr`
+
+队列内部存`shared_ptr<T>`而非`T`：
+
+* `push`先在锁外构造`shared_ptr`，再加锁入队 — 减少持锁时间
+* `wait_and_pop`返回`shared_ptr`时直接返回队列中的指针，避免额外拷贝/移动
+
+**好处**：`make_shared`的内存分配在锁外完成，锁内只做指针赋值，降低了锁的粒度。
+
+#### 版本三：`threadsafe_queue_ht<T>` — 双锁分离头尾
+
+核心设计：用链表替换`std::queue`，**head和tail各一把锁**，push和pop可以真正并发：
+
+```
+head → [dummy] → [node1] → [node2] → ... ← tail
+       (pop端)                            (push端)
+```
+
+* **head_mutex**：保护`head`指针，pop操作用
+* **tail_mutex**：保护`tail`指针，push操作用
+* **dummy node**：哨兵节点，`head.get() == tail`表示队列为空，避免head和tail指向同一节点时需要同时持两把锁
+* **`wait_for_data`**：等待时先锁head，再通过`get_tail()`短暂锁tail判空，确认非空后返回`unique_lock`，后续`pop_head`直接复用
+
+**关键点**：push只锁tail，pop只锁head，两者互不阻塞，实现了真正的并发访问。
+
 # 进程
 
 fork前是多线程，fork后是不会继续运行多线程
