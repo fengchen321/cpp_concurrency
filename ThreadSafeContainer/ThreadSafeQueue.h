@@ -3,7 +3,7 @@
 #include <mutex>
 #include <memory>
 #include <condition_variable>
-// 样面临线程执行wait_and_pop时如果出现了异常，导致数据被滞留在队列中，其他线程也无法被唤醒的情况。
+// 面临线程执行wait_and_pop时如果出现了异常，导致数据被滞留在队列中，其他线程也无法被唤醒的情况。
 template<typename T>
 class threadsafe_queue {
 public:

@@ -10,6 +10,11 @@ public:
     MyClass(const MyClass& mc) {
         _data = mc._data;
     }
+
+    int GetData() const {
+		return _data;
+	}
+
     MyClass& operator=(const MyClass& other) {
         _data = other._data;
         return *this;
