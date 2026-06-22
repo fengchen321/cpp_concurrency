@@ -1195,10 +1195,6 @@ private:
 };
 ```
 
-
-
-
-
 ## 并发安全容器
 
 ### 线程安全队列
@@ -1238,6 +1234,11 @@ head → [dummy] → [node1] → [node2] → ... ← tail
 * **`wait_for_data`**：等待时先锁head，再通过`get_tail()`短暂锁tail判空，确认非空后返回`unique_lock`，后续`pop_head`直接复用
 
 **关键点**：push只锁tail，pop只锁head，两者互不阻塞，实现了真正的并发访问。
+
+## 无锁
+
+- 延时删除：将要删除的节点放入待删除列表中
+- hazard pointer 风险指针
 
 # 进程
 
