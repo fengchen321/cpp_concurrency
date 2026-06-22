@@ -1238,7 +1238,8 @@ head → [dummy] → [node1] → [node2] → ... ← tail
 ## 无锁
 
 - 延时删除：将要删除的节点放入待删除列表中
-- hazard pointer 风险指针
+- hazard pointer 风险指针: 将节点存放到候删链表上
+- 引用计数：对各节点分别维护一个计数器
 
 # 进程
 

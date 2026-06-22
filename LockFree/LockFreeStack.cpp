@@ -6,6 +6,8 @@
 
 #include "LockFreeStack.h"
 #include "LockFreeStackHP.h"
+#include "LockFreeStackRefCount.h"
+#include "LockFreeStackMemory.h"
 
 template <typename Stack>
 void TestLockFreeStack() {
@@ -55,5 +57,7 @@ void TestLockFreeStack() {
 int main() {
     TestLockFreeStack<lockfree_stack<int>>();
     TestLockFreeStack<lockfree_stack_hp<int>>();
+    TestLockFreeStack<lockfree_stack_refcount<int>>();
+    TestLockFreeStack<lockfree_stack_memory<int>>();
     return 0;
 }
